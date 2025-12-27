@@ -47,4 +47,16 @@ class Order:
         return price
 
     def get_training_data(self, is_delivered=True, with_distance_seller_customer=False):
-        pass
+        # 1. Ana veriyi (wait_time) al
+        training_data = self.get_wait_time(is_delivered=is_delivered)
+        
+        # 2. Diğer özellikleri merge et
+        training_data = training_data.merge(self.get_review_score(), on='order_id') \
+                                     .merge(self.get_number_items(), on='order_id') \
+                                     .merge(self.get_number_sellers(), on='order_id') \
+                                     .merge(self.get_price_and_freight(), on='order_id')
+        
+        # 3. Eksik verileri temizle (dropna)
+        training_data = training_data.dropna()
+        
+        return training_data
