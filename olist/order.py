@@ -42,7 +42,11 @@ class Order:
         return reviews[['order_id', 'dim_is_five_star', 'dim_is_one_star', 'review_score']]
 
     def get_number_items(self):
-        pass
+        items = Olist().get_data()['order_items'].copy()
+        items = items.groupby('order_id').agg({'product_id': 'count'})
+        items.rename(columns={'product_id': 'number_of_items'}, inplace=True)
+        items.reset_index(inplace=True)  # <-- Bunu ekledik
+        return items
 
     def get_number_sellers(self):
         pass
