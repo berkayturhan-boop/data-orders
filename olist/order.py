@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from olist.data import Olist
+from olist.utils import haversine_distance
 
 class Order:
     def get_wait_time(self, is_delivered=True):
@@ -46,17 +47,57 @@ class Order:
         price.reset_index(inplace=True)
         return price
 
+    def get_distance_seller_customer(self):
+        # 1. Verileri çek
+        data = Olist().get_data()
+        orders = data['orders']
+        items = data['order_items']
+        sellers = data['sellers']
+        customers = data['customers']
+        geo = data['geolocation']
+
+        # 2. Sadece teslim edilenler
+        orders = orders[orders['order_status'] == 'delivered']
+
+        # 3. Geo verisini tekilleştir
+        geo = geo.groupby('geolocation_zip_code_prefix').first().reset_index()
+
+        # 4. Merge işlemleri
+        merged = orders.merge(items, on='order_id') \
+                       .merge(sellers, on='seller_id') \
+                       .merge(customers, on='customer_id')
+
+        # 5. Müşteri koordinatları
+        merged = merged.merge(geo, left_on='customer_zip_code_prefix', right_on='geolocation_zip_code_prefix', how='left')
+        merged.rename(columns={'geolocation_lat': 'c_lat', 'geolocation_lng': 'c_lng'}, inplace=True)
+
+        # 6. Satıcı koordinatları
+        merged = merged.merge(geo, left_on='seller_zip_code_prefix', right_on='geolocation_zip_code_prefix', how='left')
+        merged.rename(columns={'geolocation_lat': 's_lat', 'geolocation_lng': 's_lng'}, inplace=True)
+
+        # 7. Eksik verileri at
+        merged = merged.dropna(subset=['c_lat', 'c_lng', 's_lat', 's_lng'])
+
+        # 8. Mesafeyi hesapla
+        merged['distance_seller_customer'] = merged.apply(
+            lambda row: haversine_distance(row['c_lng'], row['c_lat'], row['s_lng'], row['s_lat']), 
+            axis=1
+        )
+
+        # 9. Ortalama al ve döndür
+        unique_dist = merged.groupby('order_id').agg({'distance_seller_customer': 'mean'}).reset_index()
+        return unique_dist
+
     def get_training_data(self, is_delivered=True, with_distance_seller_customer=False):
-        # 1. Ana veriyi (wait_time) al
         training_data = self.get_wait_time(is_delivered=is_delivered)
         
-        # 2. Diğer özellikleri merge et
         training_data = training_data.merge(self.get_review_score(), on='order_id') \
                                      .merge(self.get_number_items(), on='order_id') \
                                      .merge(self.get_number_sellers(), on='order_id') \
                                      .merge(self.get_price_and_freight(), on='order_id')
         
-        # 3. Eksik verileri temizle (dropna)
-        training_data = training_data.dropna()
+        if with_distance_seller_customer:
+            training_data = training_data.merge(self.get_distance_seller_customer(), on='order_id')
         
+        training_data = training_data.dropna()
         return training_data
