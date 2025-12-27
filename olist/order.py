@@ -42,14 +42,30 @@ class Order:
         return reviews[['order_id', 'dim_is_five_star', 'dim_is_one_star', 'review_score']]
 
     def get_number_items(self):
+        # 1. Veriyi çek
         items = Olist().get_data()['order_items'].copy()
+        
+        # 2. Sipariş başına ürün sayısını bul
         items = items.groupby('order_id').agg({'product_id': 'count'})
+        
+        # 3. Sütun ismini güncelle ve indexi düzelt
         items.rename(columns={'product_id': 'number_of_items'}, inplace=True)
-        items.reset_index(inplace=True)  # <-- Bunu ekledik
+        items.reset_index(inplace=True)
+        
         return items
 
     def get_number_sellers(self):
-        pass
+        # 1. Veriyi çek
+        sellers = Olist().get_data()['order_items'].copy()
+        
+        # 2. Sipariş başına BENZERSİZ satıcı sayısını bul
+        sellers = sellers.groupby('order_id').agg({'seller_id': 'nunique'})
+        
+        # 3. Sütun ismini güncelle ve indexi düzelt
+        sellers.rename(columns={'seller_id': 'number_of_sellers'}, inplace=True)
+        sellers.reset_index(inplace=True)
+        
+        return sellers
 
     def get_price_and_freight(self):
         pass
